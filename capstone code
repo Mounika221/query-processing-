@@ -1,0 +1,144 @@
+# Import necessary libraries
+from google.colab import drive
+import seaborn as sns
+import matplotlib.pyplot as plt
+import pandas as pd
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
+from yellowbrick.cluster import KElbowVisualizer
+from sklearn.model_selection import train_test_split
+from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+import numpy as np
+
+# Mount Google Drive to access files
+drive.mount('/content/drive')
+
+# Specify the path where the dataset is stored in Google Drive
+drive_file_path = '/content/drive/MyDrive/dataset/store_sales_data.csv'
+
+# Load the dataset from the specified path
+data = pd.read_csv(drive_file_path)
+
+# Display the first 5 rows of the dataset
+print(data.head())
+
+# Calculate descriptive statistics for the dataset and transpose it for easier viewing
+print(data.describe().T)
+
+# Display general information about the dataset (columns, data types, etc.)
+data.info()
+
+# Calculate the number of missing values in each column
+print(data.isnull().sum())
+
+# Create a pairplot to visualize relationships between variables in the dataset
+sns.pairplot(data)
+plt.show()
+
+# Create boxplots for individual columns
+columns_to_plot = ['Daily_Customer_Count', 'Items_Available', 'Store_Area']
+for column in columns_to_plot:
+    sns.boxplot(x=data[column])
+    plt.title(f'Boxplot for {column}')
+    plt.show()
+
+# Create jointplots to visualize relationships with regression
+relationships = [
+    ('Daily_Customer_Count', 'Store_Sales', 'm'),
+    ('Items_Available', 'Store_Sales', 'y'),
+    ('Store_Area', 'Store_Sales', 'g')
+]
+
+for x, y, color in relationships:
+    sns.jointplot(x=x, y=y, data=data, kind='reg', color=color)
+    plt.show()
+
+# Heatmap to show correlations between variables
+plt.figure(figsize=(10, 7))
+sns.heatmap(data.corr(), annot=True, linewidths=0.5, cmap='Blues')
+plt.title('Correlation Heatmap')
+plt.show()
+
+# Scale the dataset using StandardScaler
+scaler_data = data.copy()
+scaler = StandardScaler()
+scaler_data[['Store_Area', 'Items_Available', 'Daily_Customer_Count']] = scaler.fit_transform(
+    scaler_data[['Store_Area', 'Items_Available', 'Daily_Customer_Count']]
+)
+print(scaler_data.head())
+
+# Define features (X) and target (y)
+X = scaler_data[['Store_Area', 'Items_Available', 'Daily_Customer_Count']]
+y = scaler_data['Store_Sales']
+
+# Apply KMeans clustering and use the Elbow method to find the optimal number of clusters
+kmeans = KMeans()
+visualizer = KElbowVisualizer(kmeans, k=(2, 30))
+visualizer.fit(X)
+visualizer.show()
+
+# Apply KMeans clustering with 7 clusters and plot the cluster results
+kmeans = KMeans(n_clusters=7).fit(X)
+clusters = kmeans.labels_
+
+plt.scatter(X.iloc[:, 0], X.iloc[:, 1], c=clusters, s=50, cmap="cividis")
+centers = kmeans.cluster_centers_
+plt.scatter(centers[:, 0], centers[:, 1], c="red", s=100)
+plt.title('KMeans Clustering')
+plt.show()
+
+# Add the cluster labels to the original dataset
+kmeans_data = data.copy()
+kmeans_data['Clusters'] = clusters
+print(kmeans_data.head(15))
+
+# Define features (X) and target (y) with the added cluster information
+X = kmeans_data[['Store_Area', 'Items_Available', 'Daily_Customer_Count', 'Clusters']]
+y = kmeans_data['Store_Sales']
+
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.20, random_state=42)
+print("X_train shape:", X_train.shape)
+print("y_train shape:", y_train.shape)
+print("X_test shape:", X_test.shape)
+print("y_test shape:", y_test.shape)
+
+# Line plot to visualize 'Store_Sales' over time
+data['Date'] = pd.date_range(start='2023-01-01', periods=len(data))
+data.set_index('Date', inplace=True)
+plt.figure(figsize=(14, 6))
+plt.plot(data['Store_Sales'], label='Store Sales', color='blue')
+plt.title('Store Sales Over Time')
+plt.xlabel('Date')
+plt.ylabel('Sales (USD)')
+plt.legend()
+plt.grid()
+plt.show()
+
+# Lag plot to analyze relationship between 'Store Sales' at time t and t+1
+plt.figure(figsize=(8, 6))
+sns.regplot(x=data['Store_Sales'][:-1], y=data['Store_Sales'][1:], marker='o',
+            line_kws={"color": "red"}, scatter_kws={'alpha': 0.5})
+plt.title('Lag Plot of Store Sales')
+plt.xlabel('Store Sales (t)')
+plt.ylabel('Store Sales (t+1)')
+plt.grid()
+plt.show()
+
+# Autocorrelation plot for 'Store_Sales'
+plt.figure(figsize=(12, 6))
+plot_acf(data['Store_Sales'], lags=40)
+plt.title('Autocorrelation of Store Sales')
+plt.xlabel('Lag')
+plt.ylabel('Autocorrelation')
+plt.grid()
+plt.show()
+
+# Partial autocorrelation plot for 'Store_Sales'
+plt.figure(figsize=(12, 6))
+plot_pacf(data['Store_Sales'], lags=40)
+plt.title('Partial Autocorrelation of Store Sales')
+plt.xlabel('Lag')
+plt.ylabel('Partial Autocorrelation')
+plt.grid()
+plt.show()
